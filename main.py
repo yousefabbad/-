@@ -5,10 +5,10 @@ from decimal import Decimal, getcontext
 import numpy as np
 import math
 
-# دقّة مرتفعة لحساب الأصفار
+# دقّة مرتفعة للحسابات العشرية
 getcontext().prec = 50
 
-# أول 100 صفر غير تافه لدالة زيتا (القيم موثّقة)
+# أول 100 صِفر غير تافه لدالة زيتا
 zeta_values = [
     14.134725141734693790, 21.022039638771554992, 25.010857580145688763,
     30.424876125859513210, 32.935061587739189690, 37.586178158825671257,
@@ -48,45 +48,44 @@ zeta_values = [
     236.524378361648316528, 238.284458569020773675, 239.737193991733520280
 ]
 
-# تحويل لـ Decimal ثم إلى أعداد صحيحة بمقياس كبير لضمان الدقة
+# نحولها إلى أعداد صحيحة بمقياس ثابت
 SCALE = 10**9
 zeta_ints = [int(Decimal(str(z)) * SCALE) for z in zeta_values]
 
 st.set_page_config(page_title="ZetaKey χ²-Entropy", layout="centered", page_icon="🔐")
-st.title("🔐 تقييم مفاتيح RSA عبر χ² و Entropy على أوّل 100 صفر من زيتا")
+st.title("🔐 تقييم مفاتيح RSA باستخدام χ² وEntropy على أوّل 100 صفر من زيتا")
 
-uploaded = st.file_uploader("📎 ارفع مفتاح عام بصيغة PEM", type=["pem"])
+uploaded = st.file_uploader("📎 ارفع مفتاح عام PEM", type=["pem"])
 if uploaded:
     try:
         pub = serialization.load_pem_public_key(uploaded.read(), backend=default_backend())
         n = pub.public_numbers().n
-        bits = n.bit_length()
-        st.write(f"**Bit-length (n)** : {bits} بت")
 
-        # نسب البواقي: (n mod γᵢ) / γᵢ  →  ∈ (0,1)
-        ratios = [(n % z_int) / z_val for z_int, z_val in zip(zeta_ints, zeta_values)]
+        st.write(f"**Bit-length (n)** : {n.bit_length()} بت")
 
-        # تقسيم إلى 20 فئة متساوية
+        # النسب: (n mod γᵢ) / γᵢ  ∈ (0, 1)
+        ratios = [(n % z_int) / z_int for z_int in zeta_ints]
+
+        # هيستوغرام 20 فئة
         hist, _ = np.histogram(ratios, bins=20, range=(0.0, 1.0))
         total = hist.sum()
         expected = total / 20
 
-        # χ² يدوي
-        chi_sq = np.sum((hist - expected)**2 / expected)
+        # اختبار χ² يدوي (19 درجات حرية)
+        chi_sq = float(np.sum((hist - expected) ** 2 / expected))
 
         # Entropy
         probs = hist / total
-        entropy = -np.sum([p * math.log2(p) for p in probs if p > 0])
+        entropy = -float(np.sum([p * math.log2(p) for p in probs if p > 0]))
 
         st.subheader("📊 إحصائيات التوزيع")
         st.write(f"**χ² (19 dof)** = {chi_sq:.2f}")
-        st.write(f"**Entropy (bits)** = {entropy:.3f} / max ≈ {math.log2(20):.3f}")
+        st.write(f"**Entropy** = {entropy:.3f} / max ≈ {math.log2(20):.3f}")
 
-        # تقييم مبسّط
         if chi_sq > 30 or entropy < 3.5:
-            st.error("❌ توزيع غير متجانس – المفتاح يُحتمل أنه ذو توليد ضعيف")
+            st.error("❌ توزيع غير متجانس – المفتاح يُحتمل أنّه ضعيف التوليد")
         else:
-            st.success("✅ توزيع قريب من العشوائي – المفتاح يبدو جيد التوليد")
+            st.success("✅ توزيع قريب من العشوائي – المفتاح يبدو جيّد التوليد")
 
     except Exception as err:
         st.error(f"❌ خطأ: {err}")
