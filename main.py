@@ -5,10 +5,10 @@ from decimal import Decimal, getcontext
 import numpy as np
 import math
 
-# دقّة مرتفعة للحسابات العشرية
+# دقة عالية للحسابات العشرية
 getcontext().prec = 50
 
-# أول 100 صِفر غير تافه لدالة زيتا
+# أول 100 صفر غير تافه لدالة زيتا
 zeta_values = [
     14.134725141734693790, 21.022039638771554992, 25.010857580145688763,
     30.424876125859513210, 32.935061587739189690, 37.586178158825671257,
@@ -47,45 +47,60 @@ zeta_values = [
     231.250970440297572123, 232.930107046898393023, 234.083725023641146580,
     236.524378361648316528, 238.284458569020773675, 239.737193991733520280
 ]
-
-# نحولها إلى أعداد صحيحة بمقياس ثابت
+# مقياس لتحويلها لأعداد صحيحة
 SCALE = 10**9
 zeta_ints = [int(Decimal(str(z)) * SCALE) for z in zeta_values]
 
-st.set_page_config(page_title="ZetaKey χ²-Entropy", layout="centered", page_icon="🔐")
-st.title("🔐 تقييم مفاتيح RSA باستخدام χ² وEntropy على أوّل 100 صفر من زيتا")
+st.set_page_config(page_title="ZetaKey Full Analyzer", layout="centered", page_icon="🔐")
+st.title("🔐 ZetaKey: تحليل RSA شامل")
 
-uploaded = st.file_uploader("📎 ارفع مفتاح عام PEM", type=["pem"])
-if uploaded:
-    try:
-        pub = serialization.load_pem_public_key(uploaded.read(), backend=default_backend())
-        n = pub.public_numbers().n
+# رفع المفتاح
+uploaded = st.file_uploader("📎 ارفع ملف PEM للمفتاح العام", type=["pem"])
+if not uploaded:
+    st.info("ارفع مفتاح عام بصيغة PEM ليتم التحليل.")
+    st.stop()
 
-        st.write(f"**Bit-length (n)** : {n.bit_length()} بت")
+# معالجة المفتاح
+try:
+    pub = serialization.load_pem_public_key(uploaded.read(), backend=default_backend())
+    n = pub.public_numbers().n
+    e = pub.public_numbers().e
 
-        # النسب: (n mod γᵢ) / γᵢ  ∈ (0, 1)
-        ratios = [(n % z_int) / z_int for z_int in zeta_ints]
+    st.success("✅ تم استخراج المفتاح")
+    st.write(f"**Bit-length (n):** {n.bit_length()} بت")
+    st.write(f"**Exponent (e):** {e}")
 
-        # هيستوغرام 20 فئة
-        hist, _ = np.histogram(ratios, bins=20, range=(0.0, 1.0))
-        total = hist.sum()
-        expected = total / 20
+    # 1) التحليل العددي بالبواقي
+    remainders = [(n % z_int) / z_int for z_int in zeta_ints]
 
-        # اختبار χ² يدوي (19 درجات حرية)
-        chi_sq = float(np.sum((hist - expected) ** 2 / expected))
+    # 2) إحصائيات الفروقات
+    arr = np.array(remainders, dtype=np.float64)
+    sigma = arr.std()
+    relative_score = sigma / math.log2(n)
 
-        # Entropy
-        probs = hist / total
-        entropy = -float(np.sum([p * math.log2(p) for p in probs if p > 0]))
+    # 3) χ² و Entropy
+    hist, _ = np.histogram(remainders, bins=20, range=(0.0, 1.0))
+    total = hist.sum()
+    expected = total / 20
+    chi_sq = float(np.sum((hist - expected) ** 2 / expected))
+    probs = hist / total
+    entropy = -float(np.sum([p * math.log2(p) for p in probs if p > 0]))
 
-        st.subheader("📊 إحصائيات التوزيع")
-        st.write(f"**χ² (19 dof)** = {chi_sq:.2f}")
-        st.write(f"**Entropy** = {entropy:.3f} / max ≈ {math.log2(20):.3f}")
+    # 4) العرض
+    st.subheader("📊 إحصائيات التحليل")
+    st.write(f"- **σ (std):** {sigma:.4f}")
+    st.write(f"- **مؤشر نسبي (σ/log₂(n)):** {relative_score:.6f}")
+    st.write(f"- **χ² (19 dof):** {chi_sq:.2f}")
+    st.write(f"- **Entropy:** {entropy:.3f} / max≈{math.log2(20):.3f}")
 
-        if chi_sq > 30 or entropy < 3.5:
-            st.error("❌ توزيع غير متجانس – المفتاح يُحتمل أنّه ضعيف التوليد")
-        else:
-            st.success("✅ توزيع قريب من العشوائي – المفتاح يبدو جيّد التوليد")
+    st.subheader("📈 توزيع البواقي")
+    st.bar_chart(hist)
 
-    except Exception as err:
-        st.error(f"❌ خطأ: {err}")
+    # 5) التقييم النهائي
+    if chi_sq > 30 or entropy < 3.5 or relative_score < 0.01:
+        st.error("❌ المفتاح يحتمل أن يكون ضعيف التوليد")
+    else:
+        st.success("✅ المفتاح يبدو جيد التوليد")
+
+except Exception as err:
+    st.error(f"❌ خطأ أثناء التحليل: {err}")
