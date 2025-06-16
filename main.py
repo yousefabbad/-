@@ -1,19 +1,30 @@
 import streamlit as st
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
+from decimal import Decimal, getcontext
 import numpy as np
 
-# أصفار دالة زيتا (أول 20 تقريباً)
-zeta_zeros = np.array([
-    14.134725, 21.022040, 25.010858, 30.424876, 32.935062,
-    37.586178, 40.918719, 43.327073, 48.005150, 49.773832,
-    52.970321, 56.446247, 59.347044, 60.831780, 65.112544,
-    67.079811, 69.546401, 72.067158, 75.704690, 77.144840
-])
+# إعداد الدقة العشرية العالية لمنع أخطاء التحويل
+getcontext().prec = 50
 
+# أول 10 أصفار من دالة زيتا (Riemann Zeta) بصيغة Decimal
+zeta_zeros = [
+    Decimal("14.134725141"), Decimal("21.022039639"),
+    Decimal("25.010857580"), Decimal("30.424876126"),
+    Decimal("32.935061588"), Decimal("37.586178159"),
+    Decimal("40.918719012"), Decimal("43.327073281"),
+    Decimal("48.005150881"), Decimal("49.773832478")
+]
+
+# نضربها بمقياس SCALE لتحويلها إلى أعداد صحيحة
+SCALE = 10**9
+zeta_ints = [int(z * SCALE) for z in zeta_zeros]
+
+# إعداد واجهة التطبيق
 st.set_page_config(page_title="ZetaKey Analyzer", layout="centered", page_icon="🔐")
-st.title("🔐 تحليل جودة مفاتيح RSA بأصفار زيتا")
+st.title("🔐 تحليل جودة مفاتيح RSA باستخدام أصفار زيتا")
 
+# رفع الملف PEM
 uploaded = st.file_uploader("📎 ارفع مفتاح عام بصيغة PEM", type=["pem"])
 
 if uploaded:
@@ -29,19 +40,28 @@ if uploaded:
         st.write(f"**Bit-length (n):** {n.bit_length()} بت")
         st.write(f"**Exponent (e):** {e}")
 
-        # 🧮 التحليل العددي مع أصفار زيتا
-        st.subheader("📊 مقارنة n مع أصفار زيتا:")
-        remainders = n % zeta_zeros
-        for idx, rem in enumerate(remainders, start=1):
-            st.write(f"γ{idx} = {zeta_zeros[idx-1]:.6f} → n mod γ{idx} = {rem:.5f}")
+        # حساب بواقي القسمة لكل γₙ باستخدام المقاييس الجديدة
+        st.subheader("📊 البواقي (n mod γₙ)")
+        remainders = []
+        for i, z_int in enumerate(zeta_ints, start=1):
+            rem_int = n % z_int
+            rem_float = rem_int / SCALE
+            remainders.append(rem_int)
+            st.write(f"γ{i} → n mod γ{i} = {rem_float:.6f}")
 
-        # تقدير مبدئي لجودة المفتاح من بقايا القسمة
-        score = np.std(remainders)  # كل ما كان التشتت أعلى، قد يدل على عشوائية أفضل
-        st.markdown(f"### 🧠 مؤشر التشتت (σ): `{score:.4f}`")
-        if score < 10:
-            st.error("❌ تشتت منخفض – قد يشير لعشوائية ضعيفة")
+        # حساب الانحراف المعياري المؤشر النسبي
+        arr = np.array(remainders, dtype=np.float64)
+        sigma = arr.std()
+        relative_score = sigma / np.log2(n)
+
+        st.markdown(f"### 🧠 الانحراف المعياري σ = {sigma:.4f}")
+        st.markdown(f"### 🔢 مؤشر نسبي = σ / log₂(n) = {relative_score:.6f}")
+
+        # تقييم أولي
+        if relative_score < 0.01:
+            st.error("❌ مؤشر منخفض — المفتاح يحتمل أنه ذو توليد ضعيف")
         else:
-            st.success("✅ تشتت جيد – المفتاح يبدو عشوائياً بدرجة أفضل")
+            st.success("✅ مؤشر عالٍ — المفتاح يبدو أكثر عشوائية")
 
     except Exception as err:
-        st.error(f"خطأ في قراءة المفتاح: {err}")
+        st.error(f"❌ خطأ في قراءة المفتاح: {err}")
