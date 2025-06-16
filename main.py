@@ -1,39 +1,22 @@
 import streamlit as st
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.backends import default_backend
-from sympy import factorint
-import math
 
+# إعداد واجهة المستخدم
 st.set_page_config(page_title="Zeta Key Analyzer", layout="centered")
+st.title("🔐 تحليل جودة المفاتيح العامة باستخدام أصفار زيتا")
+st.markdown("تحليل عددي مبتكر لتقييم جودة مفاتيح RSA بالاعتماد على سلوك أصفار دالة زيتا (Zeta Zeros γₙ).")
 
-st.title("🔐 تحليل جودة مفاتيح RSA باستخدام أصفار زيتا")
-uploaded_file = st.file_uploader("📎 ارفع مفتاح عام بصيغة PEM", type=["pem"])
+# إدخال يدوي للمودولوس
+modulus_input = st.text_area("📥 أدخل الـ Modulus (n):", placeholder="أدخل رقم كبير هنا...", height=150)
 
-if uploaded_file is not None:
-    try:
-        public_key = serialization.load_pem_public_key(
-            uploaded_file.read(),
-            backend=default_backend()
-        )
-        public_numbers = public_key.public_numbers()
-        n = public_numbers.n
-        e = public_numbers.e
+# زر التحليل
+if st.button("🔍 ابدأ التحليل"):
+    if not modulus_input.strip().isdigit():
+        st.error("❌ تأكد أن المدخل يحتوي على أرقام فقط.")
+    else:
+        n = int(modulus_input.strip())
 
-        st.success("✅ تم استخراج المفتاح بنجاح")
-        st.write(f"**Modulus (n):** {n}")
-        st.write(f"**Exponent (e):** {e}")
+        # تحليل وهمي كمثال – نطوره لاحقًا
+        result = n % 7  # بنستبدله لاحقاً بتحليل فعلي باستخدام Zeta
 
-        st.subheader("🧮 تحليل العوامل الأولية للمودولوس:")
-        factors = factorint(n)
-        for prime, count in factors.items():
-            st.write(f"{prime} ^ {count}")
-
-        st.subheader("📊 الفروقات بين العوامل:")
-        primes = sorted(factors.keys())
-        for i in range(1, len(primes)):
-            rsa_diff = primes[i] - primes[i - 1]
-            zeta_val = round(7 - math.log(i + 1), 6)  # مثال تقريبي
-            st.write(f"فرق {i}: RSA = {rsa_diff} ⬄ زيتا = {zeta_val}")
-
-    except Exception as ex:
-        st.error(f"❌ خطأ في قراءة المفتاح: {str(ex)}")
+        st.success(f"✅ التحليل المبدئي تم. النتيجة: {result}")
+        st.markdown("📌 هذا النموذج تجريبي وسنقوم بتطوير التحليل الرياضي لاحقًا بإدخال أصفار زيتا.")
